@@ -1,0 +1,46 @@
+---
+title: "Untitled"
+author: "TC"
+date: "12/13/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(lhdata2)
+library(dplyr)
+post_path="~/GIT/owaraisite/content/post/"
+
+```
+
+## R Markdown
+
+```{r}
+vlist.all = scrape_fp(lhdata2::mid.df)
+oldaid = get_existing_aid("~/GIT/owaraisite/content/post/",
+                 "~/GIT/owaraisite/content/neta/")
+vlist.new = vlist.all %>%
+  filter(!aid %in% oldaid)
+
+message(paste0("...scraping finished, ", nrow(vlist.new), " new posts"))
+
+if (nrow(vlist.new) == 0) {
+  message("...no new post detected, quitting")
+  q('no')
+} else{
+  writeLines(vlist.new$title)
+  
+  
+  message("###########################################################")
+  message("...starting downloading pics\n")
+  vlist.new.anno <-
+    annotate_vlist(vlist.new, bangumi_map = bangumi_map, imgur = FALSE)
+
+  message("###########################################################")
+  message("...starting generating posts")
+    
+  generate_post2(vlist.new.anno, post_path)
+}
+
+```
+
