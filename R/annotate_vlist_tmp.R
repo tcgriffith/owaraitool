@@ -10,8 +10,26 @@
 #' @export
 #'
 
+annotate_vlist = function(vlist.new, bangumi_map){
 
-annotate_vlist <- function(vlist.new, bangumi_map, imgur=TRUE) {
+  message("... Basic Info")
+  vlist.new.anno=annotate_basic(vlist.new, bangumi_map, FALSE)
+
+  message("... Thumbnails")
+  vlist.new.anno.pic=download_thumbnails(vlist.new.anno)
+
+  message("... Generate Text")
+  vlist.new.anno.final= gen_text(vlist.new.anno.pic)
+
+  message("... Tags")
+  vlist.new.anno.final2=fetch_tags(vlist.new.anno.final)
+
+  return(vlist.new.anno.final2)
+}
+
+
+
+annotate_basic=function(vlist.new, bangumi_map, imgur=TRUE) {
 
   if(nrow(vlist.new) ==0){
     message("# no post to annotate")
@@ -23,10 +41,10 @@ annotate_vlist <- function(vlist.new, bangumi_map, imgur=TRUE) {
 
   vlist.new.anno <- vlist.new.anno %>%
     mutate(up = author) %>%
-    mutate(bangumi = tolower(getbangumi2(title, bangumi_map))) %>%
+    mutate(bangumi = tolower(owaraitool:::getbangumi2(title, bangumi_map))) %>%
     mutate(title_bk = title,
            title = gsub("【.*?】", "", title_bk)) %>%
-    mutate(airdate = getyearsdf(title)) %>%
+    mutate(airdate = owaraitool:::getyearsdf(title)) %>%
     mutate(slug = paste0(
       format(created, "%Y-%m-%d"),
       "-",
@@ -50,45 +68,45 @@ annotate_vlist <- function(vlist.new, bangumi_map, imgur=TRUE) {
     #   publishdate, "%y%m%d"
     # ))))
     mutate(weight = 200000 - as.numeric(format(date,"%y%m%d"))) %>%
-    mutate(date=format(date,"%Y-%m-%d"))
+    mutate(date=format(date,"%Y-%m-%d")) %>%
+    mutate(categories=zmz,
+           bangumis=bangumi)
 
 
-  ## unable to vectorize, use for lists
-  vlist.new.anno$cid = NA
+    ## unable to vectorize, use for lists
+    vlist.new.anno$cid = NA
   vlist.new.anno$imgur = NA
   vlist.new.anno$tags = NA
 
+  return(vlist.new.anno)
 
-  ## have to use loop
-  for (i in 1:nrow(vlist.new.anno)) {
-    vlist.new.anno$cid[i] <- api_aid2cid(vlist.new.anno$aid[i])
-    vlist.new.anno$tags[i] <-
-      I(api_getbilitags(vlist.new.anno$aid[i]))
-    vlist.new.anno$categories[i] <-
-      I(list(c(
-        vlist.new.anno$zmz[i], vlist.new.anno$author[i]
-      )))
-    vlist.new.anno$bangumis[i] <- I(list(vlist.new.anno$bangumi[i]))
-    vlist.new.anno$author[i] = I(list(unique(
-      c(vlist.new.anno$zmz[i], vlist.new.anno$author[i])
-    )))
-    Sys.sleep(1)
-    #  vlist.new.anno$imgur[i] <-
-  }
-  message("\n...cid, tags, categories, bangumis finished, uploading front cover to imgur")
+}
 
-  if(imgur) {
-    for (i in 1:nrow(vlist.new.anno)) {
-      vlist.new.anno$imgur[i] <- api_upload_imgur(vlist.new.anno$pic[i])
-    }
-  }
-  else {
-    for (i in 1:nrow(vlist.new.anno)){
-      vlist.new.anno$imgur[i] = api_upload_github(vlist.new.anno$pic[i], "~/GIT/owaraisite/static/tmpimg/")
-    }
-  }
+download_thumbnails = function(vlist.new.anno) {
 
+  pbapply::pboptions(type="txt")
+  vlist.new.anno$imgur=
+    pbapply::pbsapply(vlist.new.anno$pic,function(url){
+      path=owaraitool:::api_upload_github(url, "~/GIT/owaraisite/static/tmpimg/")
+    })
+
+  return(vlist.new.anno)
+}
+
+fetch_tags = function(vlist.new.anno) {
+
+
+  pbapply::pboptions(type="txt")
+  vlist.new.anno$tags=pbapply::pbsapply(vlist.new.anno$aid, function(aid){
+    return(I(owaraitool::api_getbilitags(aid)))
+  })
+
+  return(vlist.new.anno)
+}
+
+gen_text = function(vlist.new.anno){
   vlist.new.anno <- vlist.new.anno %>%
+
     mutate(
       text = paste0(
         "![](",imgur,")\n",
@@ -96,10 +114,11 @@ annotate_vlist <- function(vlist.new, bangumi_map, imgur=TRUE) {
         desc,"  \n",
         "\n[去B站观看](https://www.bilibili.com/video/av",aid,"/)\n",
         '<div class ="resp-container">',
-          '<iframe class="testiframe" src="//player.bilibili.com/player.html?aid=', aid,'"", scrolling="no", allowfullscreen="true" > </iframe>',
+        '<iframe class="testiframe" src="//player.bilibili.com/player.html?aid=', aid,'"", scrolling="no", allowfullscreen="true" > </iframe>',
         '</div>',
-       " "
+        " "
       )
     )
+
   return(vlist.new.anno)
 }
